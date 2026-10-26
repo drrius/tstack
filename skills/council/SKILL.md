@@ -5,6 +5,8 @@ description: Trigger this if the user says 'council'.
 
 # Council
 
+If `origin` is an Azure DevOps remote, read [azure-devops](../azure-devops/SKILL.md) first and use its translations for every `gh` step and GitHub concept below.
+
 Bring in three delegates to help with the user's request, usually for review
 or feedback. Use one strong model from each of three different providers, at
 high reasoning effort. If the user's instructions name council members, use

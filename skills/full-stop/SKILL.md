@@ -5,6 +5,8 @@ description: Trigger this if the user says 'full stop'.
 
 # Full Stop
 
+If `origin` is an Azure DevOps remote, read [azure-devops](../azure-devops/SKILL.md) first and use its translations for every `gh` step and GitHub concept below.
+
 Do the same work as `full-send`, but stop with the PR ready for the user to merge.
 Never merge it.
 

@@ -5,6 +5,8 @@ description: File a concise pull request. Use when the user asks to file, open, 
 
 # File PR
 
+If `origin` is an Azure DevOps remote, read [azure-devops](../azure-devops/SKILL.md) first and use its translations for every `gh` step and GitHub concept below.
+
 Before filing, check whether a PR for this branch already exists. Review the
 diff locally against the base branch (usually `origin/main`) to make sure its
 contents match the goal.

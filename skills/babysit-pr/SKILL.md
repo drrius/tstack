@@ -5,6 +5,8 @@ description: Monitor a pull request through review and CI. Use when the user ask
 
 # Babysit PR
 
+If `origin` is an Azure DevOps remote, read [azure-devops](../azure-devops/SKILL.md) first and use its translations for every `gh` step and GitHub concept below.
+
 Many repos have AI review bots. They're helpful, even if they are not always
 right.
 

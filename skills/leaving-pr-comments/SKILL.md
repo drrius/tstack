@@ -5,6 +5,8 @@ description: Use whenever leaving comments on GitHub.
 
 # Leaving PR Comments
 
+If `origin` is an Azure DevOps remote, read [azure-devops](../azure-devops/SKILL.md) first and use its translations for every `gh` step and GitHub concept below.
+
 Prefix every agent-authored comment left on the user's behalf with this GitHub
 note callout:
 
