@@ -467,15 +467,19 @@ class Watcher:
 
         # Reviewer votes. The last vote per reviewer lives in state, so each change is a transition, and a vote
         # that flips and flips back is reported both times. A reviewer first seen with a vote counts as a change.
+        # A negative vote blocks ready on its own, whether or not a reviewer policy turns it into a rejection.
+        rejections: list[str] = []
         for reviewer in pr.get("reviewers") or []:
             who_id, who_name = identity(reviewer)
             vote = int(reviewer.get("vote") or 0)
             previous = self.state["votes"].get(who_id)
             self.state["votes"][who_id] = vote
+            required = " (required)" if reviewer.get("isRequired") else ""
             changed = vote != previous if previous is not None else vote != 0
             if changed and who_id not in mine:
-                required = " (required)" if reviewer.get("isRequired") else ""
                 self.event(f"review from {who_name}{required}: {VOTES.get(vote, vote)}")
+            if vote < 0:
+                rejections.append(f"{who_name}{required} {VOTES.get(vote, vote)}")
 
         # Target branch and merge state.
         target_oid = (pr.get("lastMergeTargetCommit") or {}).get("commitId")
@@ -502,6 +506,7 @@ class Watcher:
         parts = [
             ", ".join(f"{n} {s}" for s, n in sorted(counts.items())) if blocking else "no blocking policies",
             f"reviewer policies pending: {', '.join(pending_reviewers)}" if pending_reviewers else "",
+            f"votes against: {', '.join(rejections)}" if rejections else "",
             f"{len(unresolved)} open threads",
             f"merge status {merge_status}",
             "draft" if pr.get("isDraft") else "",
@@ -527,6 +532,8 @@ class Watcher:
             if green and merge_status == "succeeded":
                 if unresolved:
                     self.finish(1, [f"blocked by {len(unresolved)} open threads on {short}: {' '.join(self.web + '?discussionId=' + t for t in unresolved)}"])
+                if rejections:
+                    self.finish(1, [f"blocked by votes against on {short}: {'; '.join(rejections)}"])
                 stale = self.stale_builds(checks, merge_commit)
                 if stale:
                     self.finish(1, [f"approved build is stale on {short}: {s}" for s in stale])
