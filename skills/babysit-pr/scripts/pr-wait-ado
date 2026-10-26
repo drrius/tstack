@@ -13,26 +13,31 @@ Everything goes through `az` (azure-devops extension), so sign in with
 `az login` or `az devops login` first.
 
 --until
-  green       every blocking build or status policy approved on the current
-              merge (every blocking policy when there is no build policy)
+  green       every blocking build or status policy approved, and each
+              approved build ran on the current merge commit. With no such
+              policy, green at once.
   ready       green, every other blocking policy approved except reviewer
               policies, the merge succeeded, and no thread is open (default).
               Reviewer policies are the user's line: ready reports them
-              pending instead of waiting on them.
+              pending instead of waiting on them. A reviewer rejection is
+              a blocker, like an open thread.
   any-change  stop after the first poll that prints an event
 
 Exit codes
   0  the --until condition is met, or the PR completed
-  1  the condition cannot be met without action: a blocking policy was
-     rejected or broke, the merge has conflicts, the PR was abandoned,
-     `ready` is blocked by open threads, or Azure DevOps stayed unreachable
+  1  the condition cannot be met without action: a policy in the mode's gate
+     was rejected or broke, an approved build ran on an older merge, the merge
+     has conflicts, the PR was abandoned, `ready` is blocked by open threads or
+     a reviewer rejection, or Azure DevOps stayed unreachable
   2  bad arguments, unknown PR, or another pr-wait-ado already watches this PR
 
 Events
-  - a blocking policy was rejected or broke (name and build link)
+  - a blocking policy was rejected or broke (name and build link). Only one
+    in the mode's gate ends the run.
   - every policy finished evaluating on the current merge (one summary line)
   - a new thread or reply from someone other than the PR author or --me
-  - a reviewer vote changed (approved, rejected, waiting for author)
+  - a reviewer vote changed (approved, rejected, waiting for author). Every
+    transition is reported, so a vote that flips and flips back shows twice.
   - the target branch moved. When run inside the checkout, only when the new
     commits touch files in this PR, named in the line.
   - the merge has conflicts
@@ -298,6 +303,12 @@ class Watcher:
             self.events += 1
             self.say(line)
 
+    def event(self, line: str) -> None:
+        """Print an event that state already deduplicates, such as a vote transition. Repeats are real."""
+        if not self.baseline:
+            self.events += 1
+            print(f"!{self.pr} {line}", flush=True)
+
     def finish(self, code: int, lines: Sequence[str] = ()) -> NoReturn:
         for line in lines:
             self.say(line)
@@ -334,6 +345,35 @@ class Watcher:
         ])
         threads = data.get("value") if isinstance(data, dict) else data
         return [t for t in threads or [] if isinstance(t, dict) and not t.get("isDeleted")]
+
+    def stale_builds(self, checks: list[Json], merge_commit: str | None) -> list[str]:
+        """Approved build policies whose build did not run on the current merge commit, as requeue hints.
+
+        A build policy can be set to never expire, so an approved status alone does not prove the build
+        saw the current target. The build's sourceVersion is the merge commit it ran on. Unknown counts
+        as fresh, so a missing field never wedges the watcher."""
+        stale: list[str] = []
+        for record in checks:
+            if record.get("status") not in PASSED:
+                continue
+            context = record.get("context") or {}
+            name = policy_name(record)
+            hint = f"queue it again: az repos pr policy queue --id {self.pr} --evaluation-id {record.get('evaluationId')}"
+            if context.get("isExpired") or context.get("buildIsNotCurrent"):
+                stale.append(f"{name} expired; {hint}")
+                continue
+            build = context.get("buildId")
+            if not build or not merge_commit:
+                continue
+            try:
+                run = az(["pipelines", "runs", "show", "--id", str(build), "--project", self.project, *self.common()])
+            except AzError as error:
+                log(f"could not read build {build} for {name}: {error}")
+                continue
+            version = (run or {}).get("sourceVersion") if isinstance(run, dict) else None
+            if version and version != merge_commit:
+                stale.append(f"{name} ran on merge {version[:7]}, current merge is {merge_commit[:7]}; {hint}")
+        return stale
 
     def target_overlap(self, old: str, new: str, source: str, target: str) -> list[str] | None:
         """Files this PR touches that the new target commits also touch. None when it cannot be computed."""
@@ -373,10 +413,15 @@ class Watcher:
         # Policies. Blocking ones gate the merge. ADO reruns them on every new merge commit.
         policies = self.fetch_policies()
         blocking = [p for p in policies if (p.get("configuration") or {}).get("isBlocking")]
-        checks = [p for p in blocking if policy_kind(p) == "check"]
+        non_reviewer = [p for p in blocking if policy_kind(p) != "reviewer"]
+        checks = [p for p in non_reviewer if policy_kind(p) == "check"]
         reviewers = [p for p in blocking if policy_kind(p) == "reviewer"]
-        others = [p for p in blocking if policy_kind(p) == "other"]
-        gate = checks or [p for p in blocking if policy_kind(p) != "reviewer"]
+        # green waits for build and status policies. ready waits for every blocking policy except reviewer ones,
+        # and treats a reviewer rejection as a blocker. Every failure is an event; only one in the gate ends the run.
+        gate = checks if self.until == "green" else non_reviewer
+        terminal = {id(p) for p in gate}
+        if self.until != "green":
+            terminal.update(id(p) for p in reviewers)
 
         fail_lines: list[str] = []
         for record in blocking:
@@ -385,16 +430,15 @@ class Watcher:
                 build = (record.get("context") or {}).get("buildId")
                 link = f" {self.org_url}/{self.project}/_build/results?buildId={build}" if build else ""
                 line = f"blocking policy {record.get('status')}: {name}{link}"
-                fail_lines.append(line)
                 self.emit(f"fail:{head}:{record.get('evaluationId') or name}:{record.get('status')}", line)
+                if id(record) in terminal:
+                    fail_lines.append(line)
         snapshot = sorted((str(p.get("evaluationId") or policy_name(p)), str(p.get("status"))) for p in blocking)
         stable = snapshot == self.prev_snapshot
         self.prev_snapshot = snapshot
-        done = lambda records: all(p.get("status") in PASSED + FAILED for p in records)  # noqa: E731
-        green = bool(gate) and stable and all(p.get("status") in PASSED for p in gate) and not fail_lines
-        if not blocking:
-            green = stable  # no policies at all: nothing gates the merge
-        all_done = done(blocking)
+        # An empty gate (reviewer-only policies, or none at all) is satisfied once two polls agree.
+        green = stable and not fail_lines and all(p.get("status") in PASSED for p in gate)
+        all_done = all(p.get("status") in PASSED + FAILED for p in blocking)
 
         # Threads and replies from people other than the author. System comments are noise.
         threads = self.fetch_threads()
@@ -421,15 +465,17 @@ class Watcher:
                     f"{kind} from {who_name}{at}{tag}: {snippet(comment.get('content'))} {self.web}?discussionId={thread.get('id')}",
                 )
 
-        # Reviewer votes.
+        # Reviewer votes. The last vote per reviewer lives in state, so each change is a transition, and a vote
+        # that flips and flips back is reported both times. A reviewer first seen with a vote counts as a change.
         for reviewer in pr.get("reviewers") or []:
             who_id, who_name = identity(reviewer)
             vote = int(reviewer.get("vote") or 0)
             previous = self.state["votes"].get(who_id)
             self.state["votes"][who_id] = vote
-            if vote != 0 and previous != vote and who_id not in mine:
+            changed = vote != previous if previous is not None else vote != 0
+            if changed and who_id not in mine:
                 required = " (required)" if reviewer.get("isRequired") else ""
-                self.emit(f"vote:{who_id}:{head}:{vote}", f"review from {who_name}{required}: {VOTES.get(vote, vote)}")
+                self.event(f"review from {who_name}{required}: {VOTES.get(vote, vote)}")
 
         # Target branch and merge state.
         target_oid = (pr.get("lastMergeTargetCommit") or {}).get("commitId")
@@ -465,18 +511,25 @@ class Watcher:
         checks_key = f"checks:{head}:{target_oid}"
 
         # Decide whether to stop. A green or ready line carries the summary, so it marks the checks event reported.
+        # Freshness is checked only at the finish line, since it costs one az call per approved build.
         if self.until != "any-change":
             if merge_status == "conflicts":
                 self.finish(1, [conflict_line])
             if fail_lines:
                 self.finish(1, fail_lines)
+            merge_commit = (pr.get("lastMergeCommit") or {}).get("commitId")
             if green and self.until == "green":
+                stale = self.stale_builds(checks, merge_commit)
+                if stale:
+                    self.finish(1, [f"approved build is stale on {short}: {s}" for s in stale])
                 self.reported.add(checks_key)
                 self.finish(0, [f"green on {short}: {summary}"])
-            others_ok = all(p.get("status") in PASSED for p in others)
-            if green and others_ok and merge_status == "succeeded":
+            if green and merge_status == "succeeded":
                 if unresolved:
                     self.finish(1, [f"blocked by {len(unresolved)} open threads on {short}: {' '.join(self.web + '?discussionId=' + t for t in unresolved)}"])
+                stale = self.stale_builds(checks, merge_commit)
+                if stale:
+                    self.finish(1, [f"approved build is stale on {short}: {s}" for s in stale])
                 self.reported.add(checks_key)
                 self.finish(0, [f"ready on {short}: {summary}"])
         if all_done and (stable or self.baseline):
