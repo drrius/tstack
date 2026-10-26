@@ -5,6 +5,8 @@ description: Use when the user says "sol loop".
 
 # sol-loop
 
+If `origin` is an Azure DevOps remote, read [azure-devops](../azure-devops/SKILL.md) first and use its translations for every `gh` step and GitHub concept below.
+
 This is a workflow for making your code changes more correct before (or
 sometimes after) filing a pull request. tl;dr - use OpenAI's GPT Sol to review
 your code in a loop.

@@ -5,6 +5,8 @@ description: Take over existing work. Use when the user asks to take over a PR, 
 
 # Takeover
 
+If `origin` is an Azure DevOps remote, read [azure-devops](../azure-devops/SKILL.md) first and use its translations for every `gh` step and GitHub concept below.
+
 Take responsibility for finishing the original goal while preserving the
 original contributors' credit. Do not defend an implementation just because
 another agent already built it.

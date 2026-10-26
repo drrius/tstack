@@ -7,6 +7,8 @@ description: >-
 
 # Modernize
 
+If `origin` is an Azure DevOps remote, read [azure-devops](../azure-devops/SKILL.md) first and use its translations for every `gh` step and GitHub concept below.
+
 Modernize the idea, not just the branch. A clean rebase does not prove that the
 PR still belongs in the product.
 
