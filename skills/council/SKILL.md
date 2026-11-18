@@ -11,12 +11,26 @@ Bring in three delegates to help with the user's request, usually for review
 or feedback. Use one strong model from each of three different providers, at
 high reasoning effort. If the user's instructions name council members, use
 those. Otherwise pick the latest flagship model from each provider, for
-example Claude Opus, GPT Sol, and Gemini Pro.
+example Claude Opus, GPT Sol, and Grok.
+
+Run Grok as Grok 4.7 on the `cursor` provider at high effort with fast mode
+on (`reasoning_effort: high`, `fastMode: true`). Fast mode is required, and
+only `cursor` offers it, so do not run Grok through another provider.
 
 In T3 Code, use `orchestrator_capabilities` to resolve the models, then
 `delegate_task` to start one delegate per model in parallel. Elsewhere, use
 the harness's subagent tools. If you cannot reach three providers, or a named
 member is unavailable, report it instead of substituting.
+
+When pstack-anywhere is installed, the council is pstack's
+`interrogate reviewers` role, so pstack's models file picks the members and
+the provider each runs on. Save the bare `orchestrator_capabilities` payload
+to a temporary catalog JSON file, then run the `check-t3.ts` that the
+poteto-mode skill names:
+`bun <check-t3.ts> --catalog <file> "interrogate reviewers" --job judgment`.
+Start one delegate per seat and pass its `target` unchanged. If the checker
+fails, report its error instead of substituting. To change the members, run
+`/setup-pstack`.
 
 Give each delegate the request and relevant context. For review or feedback,
 keep their work read-only. Collect their responses and summarize the useful
@@ -38,7 +52,7 @@ Rounds: 2
 | --- | --- | --- |
 | Claude Opus | 7/10 | 9/10 |
 | GPT Sol | 8/10 | 10/10 |
-| Gemini Pro | 7/10 | 9/10 |
+| Grok | 7/10 | 9/10 |
 ```
 
 If a delegate gives no score, write `no score`. Do not invent one.
