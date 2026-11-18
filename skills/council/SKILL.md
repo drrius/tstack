@@ -29,13 +29,16 @@ member is unavailable, report it instead of substituting.
 
 When pstack-anywhere is installed, the council is pstack's
 `interrogate reviewers` role, so pstack's models file picks the members and
-the provider each runs on. Save the bare `orchestrator_capabilities` payload
-to a temporary catalog JSON file, then run the `check-t3.ts` that the
-poteto-mode skill names:
+the provider each runs on, and this replaces the latest-flagship rule above.
+pstack is installed when a `poteto-mode` skill sits beside this one. Read its
+`SKILL.md`: step 2 gives the absolute path of `check-t3.ts`. Do not search
+for the checker or the models file; skill folders are symlinks, so `find`
+misses them. Save the bare `orchestrator_capabilities` payload to a temporary
+catalog JSON file, then run
 `bun <check-t3.ts> --catalog <file> "interrogate reviewers" --job judgment`.
-Start one delegate per seat and pass its `target` unchanged. If the checker
-fails, report its error instead of substituting. To change the members, run
-`/setup-pstack`.
+Start one delegate per seat and pass its `target` unchanged. If you cannot
+run the checker or it fails, report that and stop instead of picking models
+yourself. To change the members, run `/setup-pstack`.
 
 Give each delegate the request and relevant context. For review or feedback,
 keep their work read-only. Collect their responses and summarize the useful
