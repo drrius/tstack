@@ -16,11 +16,11 @@ Bring in three delegates to help with the user's request, usually for review
 or feedback. Use one strong model from each of three different providers, at
 high reasoning effort. If the user's instructions name council members, use
 those. Otherwise pick the latest flagship model from each provider, for
-example Claude Opus, GPT Sol, and Grok.
+example Claude Opus, GPT Sol, and Gemini 4 Neon.
 
-Run Grok as Grok 4.7 on the `cursor` provider at high effort with fast mode
-on (`reasoning_effort: high`, `fastMode: true`). Fast mode is required, and
-only `cursor` offers it, so do not run Grok through another provider.
+Run Gemini as Gemini 4 Neon (`gemini-4-neon`) on the `antigravity` provider at
+high thought level (`thought_level: high`). Do not run it through another
+provider.
 
 In T3 Code, use `orchestrator_capabilities` to resolve the models, then
 `delegate_task` to start one delegate per model in parallel. Elsewhere, use
@@ -54,8 +54,8 @@ For a code review, ask each delegate for a score out of 10.
 Count each full review pass as one round.
 A fresh review after fixes starts a new round.
 
-If the work ends in a pull request, put the results in the PR description.
-Put this section before the model and harness line at the end:
+Put the results in the final reply only. Do not add them to the PR description
+or post them as a PR comment.
 
 ```markdown
 ## Council review
@@ -66,12 +66,10 @@ Rounds: 2
 | --- | --- | --- |
 | Claude Opus | 7/10 | 9/10 |
 | GPT Sol | 8/10 | 10/10 |
-| Grok | 7/10 | 9/10 |
+| Gemini 4 Neon | 7/10 | 9/10 |
 ```
 
 If a delegate gives no score, write `no score`. Do not invent one.
-If the PR is open, edit the description. Do not post a comment for this.
-If there is no PR, put the same results in the final reply only.
 
 If you agree with their recommendations, make the changes and request a fresh
 review after. Continue this process until all delegates are satisfied with the
